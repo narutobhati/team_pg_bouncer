@@ -21,11 +21,11 @@ This file defines *how* to build it so every screen reads as one polished system
 | Framework | React 18 + Vite + TypeScript (strict) |
 | Styling | Tailwind CSS, colors via CSS custom properties (tokens below) |
 | Motion | Framer Motion (`motion`, `AnimatePresence`, `layout`, `LayoutGroup`) |
-| Charts | Recharts for standard charts; D3 (scales/shapes only) for custom SVG (sparkline, delta bars) |
-| State / data | TanStack Query for server state; Zustand for UI state (filters, drawer, theme) |
+| Charts | Hand-built SVG components in `web/src/components/charts/` (BarList, Donut, TrendLine, ConfidenceSparkline, DeltaBars) — no chart library |
+| State / data | TanStack Query for server state; Zustand for UI state (theme, batch scope, notifications); filters and the open call live in the URL |
 | Routing | React Router — tabs are routes: `/audit`, `/issues`, `/fix`, `/test`, `/history` |
 | Icons | lucide-react |
-| Live updates | SSE (`EventSource`) from Go API; fall back to polling every 2s |
+| Live updates | SSE (`EventSource`) from the Go API, bridged into the TanStack Query cache by `useLiveEvents` |
 | Font | `Inter` (UI) + `JetBrains Mono` (prompt diffs, transcripts IDs) |
 
 Folder layout:
@@ -219,61 +219,21 @@ with name + duration, batch label input, Start Processing.
 
 ## 7. API contract (Go backend)
 
-The backend is written in Go by another teammate. Frontend types in `src/types/`
-mirror its JSON exactly (snake_case on the wire, converted at the client boundary —
-or keep snake_case; pick one and be consistent). Base URL from `VITE_API_URL`.
+The backend is written in Go by another teammate. Frontend types mirror its JSON
+exactly — snake_case on the wire and in the client, no mapping layer. Base URL from `VITE_API_URL`.
 
-Suggested endpoints (align with backend owner; update this section when finalized):
-
-| Method | Path | Purpose |
-|---|---|---|
-| POST | `/api/batches` (multipart zip/audio + label) | create batch, enqueue calls |
-| GET | `/api/batches/:id` | batch status/progress |
-| GET | `/api/summary?batch=` | summary-bar metrics |
-| GET | `/api/calls?grade=&risky=&category=&lang=&prompt=&conf_min=&conf_max=` | audit table |
-| GET | `/api/calls/:id` | call detail + transcript + grade + flags |
-| POST | `/api/calls/:id/review` | mark risky reviewed |
-| POST | `/api/calls/:id/replay` | replay with current prompt |
-| GET | `/api/root-causes?batch=` | ranked clusters |
-| GET | `/api/fixes` | fix cards |
-| POST | `/api/fixes/approve` `{ids, edits}` | approve → new prompt version |
-| POST | `/api/fixes/:id/reject` | reject |
-| GET | `/api/tests` | test results + summary |
-| GET | `/api/tests/:fixId/calls` | replayed calls (old vs new) |
-| GET | `/api/prompts` | version history + fatal-rate trend |
-| GET | `/api/events` (SSE) | `call.graded`, `batch.progress`, `batch.stage`, `fixes.ready`, `test.done`, `regression` |
-
-Core types (from workflow.md):
-```ts
-type Grade = "Fatal" | "Non-Fatal";
-type Category = "wrong_capture" | "loop" | "wrong_info" | "incomplete" | "compliance" | "other";
-type RiskFlag = "frustration" | "loop" | "human_request" | "low_confidence" | "wrong_capture";
-type RootCauseType = "Prompt Issue" | "ASR Issue" | "Knowledge Gap" | "Flow Logic";
-type Stage = "idle" | "queued" | "processing" | "clustering" | "fixing" | "done";
-
-interface Turn { speaker: "BOT" | "USER"; text: string; timestamp: string; confidence: number; asr_mismatch?: boolean }
-interface Call {
-  id: number; batch_id: number; prompt_version: string; duration_sec: number;
-  language: string; overall_confidence: number;
-  grade: Grade; category: Category; reason: string; evidence: string; evidence_timestamp: string;
-  risky_flags: RiskFlag[]; reviewed: boolean; root_cause_id?: number;
-  transcript: Turn[]; simulated_transcript?: Turn[];
-}
-interface RootCause { id: number; name: string; description: string; type: RootCauseType;
-  call_ids: number[]; frequency: number; severity: number; priority_score: number; fixed: boolean }
-interface Fix { id: number; root_cause_id: number; current_excerpt: string; proposed_change: string;
-  rationale: string; expected_calls_repaired: number; status: "Pending Review" | "Approved" | "Rejected" | "Validated" | "Needs Revision" }
-interface TestResult { fix_id: number; before_rate: number; after_rate: number; replayed: number;
-  repaired: number; still_failing: number; regressed: number; minutes_to_fix: number; prompt_before: string; prompt_after: string }
-interface PromptVersion { version: string; created_at: string; based_on?: string; fixes_applied: number[];
-  fatal_rate: number; calls_applied: number; diff: string; text: string }
-```
+**Source of truth:** `web/src/types/api.ts` (wire types) and the endpoint + SSE tables in
+`web/README.md` (implemented by `web/src/api/http.ts`). The UI fetches full lists
+(`/api/calls`, `/api/root-causes`, ...) and filters client-side; live updates arrive as SSE
+events whose `event:` name is the type (`call.graded`, `batch.progress`, `root_causes.ready`,
+`fixes.ready`, `prompt.created`, `test.done`, `regression`, `call.updated`, `batch.created`).
+Change the contract in those files first, then tell the Go owner.
 
 ---
 
 ## 8. Mock mode (demo without backend)
 
-`VITE_MOCK=1` swaps the API client for an in-browser mock (`src/api/mock/`) that:
+`VITE_MOCK=1` (`npm run dev:mock`) swaps the API client for an in-browser mock (`web/src/api/mock/`) that:
 - seeds ~100 realistic Hinglish IndiaMART calls (pipes, fabrics, machinery specs),
 - on upload, streams `call.graded` events ~every 120ms (0→100) so the header,
   summary bar, and Audit table animate live,

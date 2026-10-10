@@ -315,4 +315,4 @@ Only one version is active at a time. The active version is used as the base for
 
 ## Team
 
-**Team PG Bouncer** — IndiaMART Hackathon 2025
+**Team PG Bouncer** — IndiaMART Hackathon 2026

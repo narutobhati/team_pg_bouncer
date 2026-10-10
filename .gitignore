@@ -1,7 +1,38 @@
-node_modules/
-dist/
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment / secrets
 .env
 .env.local
+.env.*.local
+
+# Databases
+*.db
+*.sqlite3
+
+# Uploads (user audio files)
+backend/uploads/
+
+# Logs
 *.log
-.DS_Store
+
+# Node / frontend
+node_modules/
+dist/
 .vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc scratch files
+sarvam_raw_response_*.txt

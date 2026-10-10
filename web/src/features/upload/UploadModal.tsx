@@ -129,7 +129,7 @@ export function UploadModal() {
           </motion.div>
           <div className="text-sm font-semibold text-t1">{reading ? "Reading files…" : drag ? "Drop to add" : "Drag & drop a zip or audio files"}</div>
           <div className="mt-1 text-xs text-t2">
-            {reading && reading.total ? `Measuring durations ${reading.done}/${reading.total}` : "or click to browse · .zip, .wav, .mp3, .m4a, .ogg, .flac"}
+            {reading && reading.total ? `Measuring durations ${reading.done}/${reading.total}` : "or click to browse · .zip, .wav, .mp3, .m4a, .ogg, .flac · max 15 files per batch"}
           </div>
           <input
             ref={input}

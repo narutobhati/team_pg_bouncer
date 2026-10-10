@@ -11,20 +11,46 @@ export interface Slice {
 }
 
 /** Part-to-whole donut (≤ 6 segments) with a 2px surface gap between segments and a centre label. */
-export function Donut({ data, size = 168, thickness = 18, center }: { data: Slice[]; size?: number; thickness?: number; center?: { value: string; label: string } }) {
+export function Donut({ data, size = 168, thickness = 14, center }: { data: Slice[]; size?: number; thickness?: number; center?: { value: string; label: string } }) {
   const [hover, setHover] = useState<string | null>(null);
   const total = data.reduce((s, d) => s + d.value, 0) || 1;
   const r = (size - thickness) / 2;
   const C = 2 * Math.PI * r;
-  const gap = data.filter((d) => d.value > 0).length > 1 ? 2 : 0; // 2px surface gap between segments
+  const nonZeroCount = data.filter((d) => d.value > 0).length;
+  const gap = nonZeroCount > 1 ? 2 : 0;
   let offset = 0;
   const active = data.find((d) => d.key === hover);
+
+  // Ghost arc length for zero-value slices: a short fixed arc so they're still visible
+  const ghostLen = C * 0.04; // 4% of circumference
 
   return (
     <div className="relative mx-auto" style={{ width: size, height: size }}>
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        {/* Track ring */}
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={thickness} />
+
+        {/* Ghost arcs for zero-value slices — show where the segment would appear */}
+        {data.map((d) =>
+          d.value === 0 ? (
+            <circle
+              key={`ghost-${d.key}`}
+              cx={size / 2}
+              cy={size / 2}
+              r={r}
+              fill="none"
+              stroke={d.color}
+              strokeWidth={thickness}
+              strokeDasharray={`${ghostLen} ${C}`}
+              strokeDashoffset={0}
+              opacity={0.18}
+            />
+          ) : null
+        )}
+
+        {/* Real slices */}
         {data.map((d, i) => {
+          if (d.value === 0) return null;
           const len = (d.value / total) * C;
           const dash = Math.max(0, len - gap);
           const el = (
@@ -38,7 +64,7 @@ export function Donut({ data, size = 168, thickness = 18, center }: { data: Slic
               strokeWidth={hover === d.key ? thickness + 4 : thickness}
               strokeDasharray={`${dash} ${C}`}
               initial={{ strokeDashoffset: -offset, opacity: 0, strokeDasharray: `0 ${C}` }}
-              animate={{ strokeDashoffset: -offset, opacity: hover && hover !== d.key ? 0.45 : 1, strokeDasharray: `${dash} ${C}` }}
+              animate={{ strokeDashoffset: -offset, opacity: hover && hover !== d.key ? 0.4 : 1, strokeDasharray: `${dash} ${C}` }}
               transition={{ duration: 0.9, ease, delay: 0.1 + i * 0.12 }}
               style={{ cursor: d.onClick ? "pointer" : "default", outline: "none" }}
               onPointerEnter={() => setHover(d.key)}

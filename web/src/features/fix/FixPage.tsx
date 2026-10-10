@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, Eye, FileText, Loader2, Pencil, Sparkles, Wrench, X } from "lucide-react";
+import { Check, ChevronDown, Eye, FileText, Loader2, Pencil, Play, RotateCcw, Sparkles, Wrench, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Fix } from "@/types/api";
 import { api } from "@/api";
-import { useApproveFixes, usePrompts, useRejectFix } from "@/api/hooks";
+import { useApproveFixes, usePrompts, useRejectFix, useRetestFix } from "@/api/hooks";
 import { useFixes, useRootCauses } from "@/api/hooks";
 import { FixStatusBadge, TypeBadge, VersionChip } from "@/components/Badges";
 import { Diff, type DiffLine } from "@/components/Diff";
@@ -12,6 +12,7 @@ import { Checkbox, EmptyState, SectionTitle } from "@/components/Misc";
 import { Modal } from "@/components/Overlay";
 import { cn } from "@/lib/util";
 import { fadeUp, stagger } from "@/theme/motion";
+import { LiveTestModal } from "./LiveTestModal";
 
 function FixCard({
   fix,
@@ -22,6 +23,7 @@ function FixCard({
   onApprove,
   approving,
   focused,
+  onLiveTest,
 }: {
   fix: Fix;
   selected: boolean;
@@ -31,10 +33,12 @@ function FixCard({
   onApprove: () => void;
   approving: boolean;
   focused: boolean;
+  onLiveTest: () => void;
 }) {
   const { data: rcs = [] } = useRootCauses();
   const rc = rcs.find((r) => r.id === fix.root_cause_id);
   const reject = useRejectFix();
+  const retest = useRetestFix();
   const nav = useNavigate();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(edit ?? fix.proposed_change);
@@ -190,6 +194,9 @@ function FixCard({
               <button className="btn-ghost px-3 py-1.5 text-xs" onClick={() => setEditing(true)} disabled={editing}>
                 <Pencil size={13} /> Edit fix
               </button>
+              <button className="btn-ghost px-3 py-1.5 text-xs" onClick={onLiveTest}>
+                <Play size={13} /> Live Test
+              </button>
               <button
                 className="btn-outline px-3 py-1.5 text-xs"
                 disabled={reject.isPending}
@@ -206,9 +213,22 @@ function FixCard({
             </div>
           )}
           {!pending && fix.status !== "Rejected" && (
-            <button className="btn-outline ml-auto px-3 py-1.5 text-xs" onClick={() => nav(`/test?fix=${fix.id}`)}>
-              View test result
-            </button>
+            <div className="ml-auto flex flex-wrap gap-2">
+              <button className="btn-ghost px-3 py-1.5 text-xs" onClick={onLiveTest}>
+                <Play size={13} /> Live Test
+              </button>
+              <button
+                className="btn-ghost px-3 py-1.5 text-xs"
+                disabled={retest.isPending}
+                onClick={() => retest.mutate(fix.id)}
+              >
+                {retest.isPending ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                Re-test
+              </button>
+              <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => nav(`/test?fix=${fix.id}`)}>
+                View test result
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -258,12 +278,19 @@ export function FixPage() {
   const [preview, setPreview] = useState<number[] | null>(null);
   const [approving, setApproving] = useState<Set<number>>(new Set());
   const [showActive, setShowActive] = useState(false);
-  const [showReviewed, setShowReviewed] = useState(false);
+  const [liveTestFix, setLiveTestFix] = useState<Fix | null>(null);
 
   const active = prompts.find((p) => p.active);
   const nextVersion = `v${prompts.length + 1}`;
   const pending = fixes.filter((f) => f.status === "Pending Review").sort((a, b) => b.priority_score - a.priority_score);
   const reviewed = fixes.filter((f) => f.status !== "Pending Review").sort((a, b) => b.id - a.id);
+
+  // Auto-expand reviewed section when navigating directly to a reviewed fix
+  const focusIsInReviewed = focus ? reviewed.some((f) => String(f.id) === focus) : false;
+  const [showReviewed, setShowReviewed] = useState(true);
+  useEffect(() => {
+    if (focusIsInReviewed) setShowReviewed(true);
+  }, [focusIsInReviewed]);
   const selectedIds = useMemo(() => pending.filter((f) => selected.has(f.id)).map((f) => f.id), [pending, selected]);
 
   const doApprove = (ids: number[]) => {
@@ -358,6 +385,7 @@ export function FixPage() {
                 })}
                 onApprove={() => doApprove([f.id])}
                 approving={approving.has(f.id)}
+                onLiveTest={() => setLiveTestFix(f)}
               />
             ))}
           </AnimatePresence>
@@ -376,7 +404,7 @@ export function FixPage() {
             {showReviewed && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="grid gap-4 overflow-hidden xl:grid-cols-2">
                 {reviewed.map((f) => (
-                  <FixCard key={f.id} fix={f} focused={focus === String(f.id)} selected={false} onSelect={() => {}} onEdit={() => {}} onApprove={() => {}} approving={false} />
+                  <FixCard key={f.id} fix={f} focused={focus === String(f.id)} selected={false} onSelect={() => {}} onEdit={() => {}} onApprove={() => {}} approving={false} onLiveTest={() => setLiveTestFix(f)} />
                 ))}
               </motion.div>
             )}
@@ -418,6 +446,7 @@ export function FixPage() {
       )}
 
       <PromptPreview open={preview != null} onClose={() => setPreview(null)} ids={preview ?? []} edits={edits} />
+      <LiveTestModal fix={liveTestFix} open={!!liveTestFix} onClose={() => setLiveTestFix(null)} />
     </div>
   );
 }

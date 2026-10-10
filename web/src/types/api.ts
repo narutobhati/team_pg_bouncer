@@ -3,11 +3,14 @@
 
 export type Grade = "Fatal" | "Non-Fatal";
 
-export const CATEGORIES = ["wrong_capture", "loop", "wrong_info", "incomplete", "compliance", "other"] as const;
+export const CATEGORIES = ["wrong_capture", "loop", "wrong_info", "incomplete", "ignored_refusal", "empathy_failure", "compliance", "other"] as const;
 export type Category = (typeof CATEGORIES)[number];
 
-export const RISK_FLAGS = ["frustration", "loop", "human_request", "low_confidence", "wrong_capture"] as const;
+export const RISK_FLAGS = ["frustration", "loop", "human_request", "low_confidence", "wrong_capture", "not_interested", "pushy", "ignored_concern"] as const;
 export type RiskFlag = (typeof RISK_FLAGS)[number];
+
+export const CALL_OUTCOMES = ["completed", "not_interested", "already_fulfilled", "wrong_person", "callback_requested", "user_dropped", "bot_failed"] as const;
+export type CallOutcome = (typeof CALL_OUTCOMES)[number];
 
 export const ROOT_CAUSE_TYPES = ["Prompt Issue", "ASR Issue", "Knowledge Gap", "Flow Logic"] as const;
 export type RootCauseType = (typeof ROOT_CAUSE_TYPES)[number];
@@ -39,6 +42,7 @@ export interface Call {
   language: string; // "hi-IN" | "en-IN" | ...
   overall_confidence: number;
   grade: Grade;
+  call_outcome?: CallOutcome;
   category?: Category; // absent on clean calls
   reason: string;
   evidence: string;
@@ -50,6 +54,8 @@ export interface Call {
   transcript: Turn[];
   simulated_transcript?: Turn[];
   simulated_grade?: Grade;
+  verified?: boolean;
+  audio_hash?: string;
 }
 
 export interface Batch {
@@ -157,6 +163,30 @@ export interface Pipeline {
   active_prompt: string;
 }
 
+export interface LiveSession {
+  session_id: string;
+  opening: string;
+  audio_b64: string | null;
+  prompt_version: string;
+  root_cause_name: string;
+  proposed_change: string;
+}
+
+export interface LiveTurnResponse {
+  text: string;
+  audio_b64: string | null;
+}
+
+export interface LiveTestResult {
+  turns: Turn[];
+  grade: Grade;
+  call_outcome: CallOutcome;
+  category: Category | null;
+  reason: string;
+  evidence: string;
+  risky_flags: RiskFlag[];
+}
+
 export interface UploadFileInfo {
   name: string;
   size: number;
@@ -166,6 +196,7 @@ export interface UploadFileInfo {
 export type ServerEvent =
   | { type: "batch.created"; batch: Batch }
   | { type: "batch.progress"; pipeline: Pipeline }
+  | { type: "batch.file_progress"; file: string; step: "transcribing" | "grading" | "done" }
   | { type: "call.graded"; call: Call }
   | { type: "root_causes.ready"; batch_id: number; count: number }
   | { type: "fixes.ready"; count: number }

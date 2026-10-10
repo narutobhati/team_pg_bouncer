@@ -69,9 +69,12 @@ export function useLiveEvents() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    const { notify, markFresh } = useUi.getState();
+    const { notify, markFresh, setFileProgress } = useUi.getState();
     const handle = (e: ServerEvent) => {
       switch (e.type) {
+        case "batch.file_progress":
+          setFileProgress({ file: e.file, step: e.step });
+          break;
         case "batch.created":
           qc.invalidateQueries({ queryKey: qk.batches });
           useUi.getState().setScope("latest");
@@ -84,7 +87,10 @@ export function useLiveEvents() {
           break;
         case "batch.progress":
           qc.setQueryData<Pipeline>(qk.pipeline, e.pipeline);
-          if (e.pipeline.stage !== "processing") qc.invalidateQueries({ queryKey: qk.batches });
+          if (e.pipeline.stage !== "processing") {
+            qc.invalidateQueries({ queryKey: qk.batches });
+            useUi.getState().setFileProgress(null);
+          }
           break;
         case "call.graded":
           upsertCall(qc, e.call);
@@ -155,6 +161,22 @@ export function useMarkReviewed() {
   });
 }
 
+export function useVerifyCall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.verifyCall(id),
+    onSuccess: (call) => upsertCall(qc, call),
+  });
+}
+
+export function useRerunCall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.rerunCall(id),
+    onSuccess: (call) => upsertCall(qc, call),
+  });
+}
+
 export function useReplayCall() {
   const qc = useQueryClient();
   return useMutation({
@@ -181,5 +203,24 @@ export function useRejectFix() {
   return useMutation({
     mutationFn: (id: number) => api.rejectFix(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.fixes }),
+  });
+}
+
+export function useGenerateFix() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rcId: number) => api.generateFix(rcId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.fixes }),
+  });
+}
+
+export function useRetestFix() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (fixId: number) => api.retestFix(fixId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.fixes });
+      qc.invalidateQueries({ queryKey: qk.tests });
+    },
   });
 }

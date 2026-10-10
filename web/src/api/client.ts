@@ -2,6 +2,9 @@ import type {
   Batch,
   Call,
   Fix,
+  LiveSession,
+  LiveTestResult,
+  LiveTurnResponse,
   Pipeline,
   PromptVersion,
   Regression,
@@ -31,6 +34,8 @@ export interface ApiClient {
   listCalls(): Promise<Call[]>;
   getCall(id: number): Promise<Call>;
   markReviewed(id: number): Promise<Call>;
+  verifyCall(id: number): Promise<Call>;
+  rerunCall(id: number): Promise<Call>;
   replayCall(id: number): Promise<{ transcript: Turn[]; grade: Call["grade"] }>;
   listRootCauses(): Promise<RootCause[]>;
   listFixes(): Promise<Fix[]>;
@@ -41,6 +46,11 @@ export interface ApiClient {
   listReplayedCalls(fixId: number): Promise<ReplayedCall[]>;
   listPrompts(): Promise<PromptVersion[]>;
   listRegressions(): Promise<Regression[]>;
+  generateFix(rcId: number): Promise<{ status: string; rc_id: number }>;
+  retestFix(fixId: number): Promise<{ status: string; fix_id: number }>;
+  startLiveTest(fixId: number, callId?: number): Promise<LiveSession>;
+  sendLiveTurn(sessionId: string, text: string): Promise<LiveTurnResponse>;
+  endLiveTest(sessionId: string): Promise<LiveTestResult>;
   subscribe(handler: (e: ServerEvent) => void): () => void;
   reset?(): Promise<void>;
 }

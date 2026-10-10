@@ -3,7 +3,11 @@ import {
   AudioWaveform,
   CheckCircle2,
   CircleDashed,
+  EarOff,
   Frown,
+  HandMetal,
+  HeartOff,
+  Megaphone,
   Repeat,
   ShieldCheck,
   Target,
@@ -93,6 +97,9 @@ export const FLAG_META: Record<RiskFlag, { icon: LucideIcon; label: string }> = 
   human_request: { icon: UserRound, label: "Asked for human" },
   low_confidence: { icon: AudioWaveform, label: "Low ASR confidence" },
   wrong_capture: { icon: Target, label: "Wrong capture" },
+  not_interested: { icon: HandMetal, label: "Not interested" },
+  pushy: { icon: Megaphone, label: "Pushy bot" },
+  ignored_concern: { icon: EarOff, label: "Ignored concern" },
 };
 
 export function RiskyFlags({ flags, showLabel }: { flags: RiskFlag[]; showLabel?: boolean }) {

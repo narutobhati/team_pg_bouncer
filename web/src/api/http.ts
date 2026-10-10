@@ -33,6 +33,7 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 const EVENT_TYPES: ServerEvent["type"][] = [
   "batch.created",
   "batch.progress",
+  "batch.file_progress",
   "call.graded",
   "call.updated",
   "root_causes.ready",
@@ -56,6 +57,8 @@ export function createHttpClient(): ApiClient {
     listCalls: () => request("/api/calls"),
     getCall: (id) => request(`/api/calls/${id}`),
     markReviewed: (id) => request(`/api/calls/${id}/review`, { method: "POST" }),
+    verifyCall: (id) => request(`/api/calls/${id}/verify`, { method: "POST" }),
+    rerunCall: (id) => request(`/api/calls/${id}/rerun`, { method: "POST" }),
     replayCall: (id) => request(`/api/calls/${id}/replay`, { method: "POST" }),
     listRootCauses: () => request("/api/root-causes"),
     listFixes: () => request("/api/fixes"),
@@ -66,6 +69,11 @@ export function createHttpClient(): ApiClient {
     listReplayedCalls: (fixId) => request(`/api/tests/${fixId}/calls`),
     listPrompts: () => request("/api/prompts"),
     listRegressions: () => request("/api/regressions"),
+    generateFix: (rcId) => request(`/api/root-causes/${rcId}/generate-fix`, { method: "POST" }),
+    retestFix: (fixId) => request(`/api/fixes/${fixId}/retest`, { method: "POST" }),
+    startLiveTest: (fixId, callId) => request("/api/live-test/start", json({ fix_id: fixId, ...(callId != null && { call_id: callId }) })),
+    sendLiveTurn: (sessionId, text) => request(`/api/live-test/${sessionId}/turn`, json({ text })),
+    endLiveTest: (sessionId) => request(`/api/live-test/${sessionId}/end`, { method: "POST" }),
     subscribe(handler) {
       // Server-Sent Events; each event's `event:` name is the ServerEvent type and `data:` is its JSON.
       const es = new EventSource(`${BASE}/api/events`);

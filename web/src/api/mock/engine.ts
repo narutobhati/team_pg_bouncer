@@ -182,6 +182,24 @@ export class MockEngine implements ApiClient {
     return this.latency(out.reverse());
   }
 
+  // ---------- live test (mock stubs — not functional in demo mode) ----------
+
+  generateFix(_rcId: number): Promise<{ status: string; rc_id: number }> {
+    return Promise.reject(new Error("Generate Fix is not available in demo mode."));
+  }
+  retestFix(_fixId: number): Promise<{ status: string; fix_id: number }> {
+    return Promise.reject(new Error("Retest is not available in demo mode."));
+  }
+  startLiveTest(_fixId: number, _callId?: number): Promise<import("@/types/api").LiveSession> {
+    return Promise.reject(new Error("Live Test is not available in demo mode. Connect to the backend."));
+  }
+  sendLiveTurn(_sessionId: string, _text: string): Promise<import("@/types/api").LiveTurnResponse> {
+    return Promise.reject(new Error("Live Test is not available in demo mode."));
+  }
+  endLiveTest(_sessionId: string): Promise<import("@/types/api").LiveTestResult> {
+    return Promise.reject(new Error("Live Test is not available in demo mode."));
+  }
+
   // ---------- upload + pipeline ----------
 
   async createBatch({ files, label, sampleCount, entries }: CreateBatchInput): Promise<Batch> {
@@ -610,6 +628,23 @@ export class MockEngine implements ApiClient {
     const call = this.calls.find((c) => c.id === id);
     if (!call) throw new Error("call not found");
     call.reviewed = !call.reviewed;
+    this.emit({ type: "call.updated", call: clone(call) });
+    return this.latency(call);
+  }
+
+  async verifyCall(id: number) {
+    const call = this.calls.find((c) => c.id === id);
+    if (!call) throw new Error("call not found");
+    call.verified = true;
+    this.emit({ type: "call.updated", call: clone(call) });
+    return this.latency(call);
+  }
+
+  async rerunCall(id: number) {
+    const call = this.calls.find((c) => c.id === id);
+    if (!call) throw new Error("call not found");
+    call.verified = false;
+    call.audio_hash = undefined;
     this.emit({ type: "call.updated", call: clone(call) });
     return this.latency(call);
   }

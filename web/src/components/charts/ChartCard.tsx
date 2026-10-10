@@ -38,8 +38,8 @@ export function ChartCard({ title, subtitle, table, children, className, legend 
       </header>
       <AnimatePresence mode="wait" initial={false}>
         {view === "chart" ? (
-          <motion.div key="c" className="flex-1" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
-            {children}
+          <motion.div key="c" className="flex flex-1 flex-col" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>
+            <div className="min-h-0 flex-1">{children}</div>
             {legend && <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-t2">{legend}</div>}
           </motion.div>
         ) : (

@@ -1,10 +1,10 @@
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { AlertOctagon, ArrowRight, Bot, ChevronDown, Info, Layers, ListFilter, ShieldCheck, User } from "lucide-react";
+import { AlertOctagon, ArrowRight, Bot, ChevronDown, Info, Layers, ListFilter, Loader2, ShieldCheck, Sparkles, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Call, RootCause } from "@/types/api";
 import { ROOT_CAUSE_TYPES } from "@/types/api";
-import { useCalls, useFixes, usePrompts, useScopedCalls, useScopedRootCauses } from "@/api/hooks";
+import { useCalls, useFixes, useGenerateFix, usePrompts, useRootCauses, useScopedCalls } from "@/api/hooks";
 import { TypeBadge, typeColor } from "@/components/Badges";
 import { EmptyState, SectionTitle, Segmented } from "@/components/Misc";
 import { Tooltip } from "@/components/Tooltip";
@@ -72,8 +72,9 @@ function ChartsRow({ rcs, calls }: { rcs: RootCause[]; calls: Call[] }) {
             </>
           }
         >
-          <div className="flex h-full items-center justify-center py-2">
+          <div className="flex items-center justify-center py-2">
             <Donut
+              size={148}
               data={[
                 { key: "f", label: "Fatal", value: fatal, color: "var(--critical)", onClick: () => nav("/audit?grade=Fatal") },
                 { key: "n", label: "Non-Fatal", value: calls.length - fatal, color: "var(--good)", onClick: () => nav("/audit?grade=Non-Fatal") },
@@ -136,6 +137,7 @@ function RootCauseCard({ rc, rank, calls, focused }: { rc: RootCause; rank: numb
   const [, openCall] = useCallParam();
   const { data: fixes = [] } = useFixes();
   const fix = fixes.find((f) => f.root_cause_id === rc.id);
+  const generateFix = useGenerateFix();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (focused) ref.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -236,7 +238,27 @@ function RootCauseCard({ rc, rank, calls, focused }: { rc: RootCause; rank: numb
           <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => nav(`/audit?rc=${rc.id}`)}>
             <ListFilter size={13} /> View all calls
           </button>
-          {fix && (
+          {!fix && (
+            <button
+              className="btn-primary ml-auto px-3 py-1.5 text-xs"
+              disabled={generateFix.isPending}
+              onClick={() => generateFix.mutate(rc.id)}
+            >
+              {generateFix.isPending ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              Generate Fix
+            </button>
+          )}
+          {fix?.status === "Rejected" && (
+            <button
+              className="btn-outline ml-auto px-3 py-1.5 text-xs"
+              disabled={generateFix.isPending}
+              onClick={() => generateFix.mutate(rc.id)}
+            >
+              {generateFix.isPending ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              Regenerate Fix
+            </button>
+          )}
+          {fix && fix.status !== "Rejected" && (
             <button className="btn-primary ml-auto px-3 py-1.5 text-xs" onClick={() => nav(`/fix?fix=${fix.id}`)}>
               Go to fix <ArrowRight size={13} />
             </button>
@@ -248,7 +270,8 @@ function RootCauseCard({ rc, rank, calls, focused }: { rc: RootCause; rank: numb
 }
 
 export function IssuesPage() {
-  const rcs = useScopedRootCauses();
+  const { data: rawRcs = [] } = useRootCauses();
+  const rcs = [...rawRcs].sort((a, b) => b.priority_score - a.priority_score);
   const scopedCalls = useScopedCalls();
   const { data: allCalls = [] } = useCalls();
   const [params] = useSearchParams();

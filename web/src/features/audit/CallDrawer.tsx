@@ -1,14 +1,15 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowUpRight, Check, Loader2, Play, Quote, Undo2 } from "lucide-react";
+import { ArrowUpRight, Check, CheckCircle2, Loader2, Play, Quote, RefreshCw, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useCalls, useMarkReviewed, useReplayCall, useRootCauses } from "@/api/hooks";
+import { useCalls, useMarkReviewed, useReplayCall, useRerunCall, useRootCauses, useVerifyCall } from "@/api/hooks";
 import { CategoryTag, GradeBadge, RiskyFlags, TypeBadge, VersionChip } from "@/components/Badges";
 import { Drawer } from "@/components/Overlay";
 import { Segmented } from "@/components/Misc";
 import { ConfidenceSparkline } from "@/components/charts/Sparkline";
 import { dateTime, duration } from "@/lib/util";
 import { Transcript } from "./Transcript";
+import { AudioPlayer } from "./AudioPlayer";
 import { useCallParam } from "./useCallParam";
 
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {
@@ -30,6 +31,8 @@ export function CallDrawer() {
   const [hoverTurn, setHoverTurn] = useState<number | null>(null);
   const replay = useReplayCall();
   const mark = useMarkReviewed();
+  const verify = useVerifyCall();
+  const rerun = useRerunCall();
   const nav = useNavigate();
 
   const hasSim = !!call?.simulated_transcript;
@@ -49,6 +52,11 @@ export function CallDrawer() {
           <span className="flex flex-wrap items-center gap-2.5">
             <span className="font-mono">{call.call_id}</span>
             <GradeBadge grade={call.grade} />
+            {call.verified && (
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-600">
+                <CheckCircle2 size={11} /> Verified
+              </span>
+            )}
             {call.simulated_grade && call.simulated_grade !== call.grade && (
               <motion.span initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-1.5 text-sm font-normal text-t2">
                 → <GradeBadge grade={call.simulated_grade} /> with fix
@@ -67,6 +75,27 @@ export function CallDrawer() {
               <button className="btn-outline" onClick={() => mark.mutate(call.id)}>
                 {call.reviewed ? <Undo2 size={15} /> : <Check size={15} />}
                 {call.reviewed ? "Mark unreviewed" : "Mark reviewed"}
+              </button>
+            )}
+            {!call.verified ? (
+              <button
+                className="btn-outline"
+                disabled={verify.isPending}
+                onClick={() => verify.mutate(call.id)}
+                title="Transcript is correct — skip re-transcription on next upload"
+              >
+                {verify.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
+                {verify.isPending ? "Saving…" : "Mark transcript correct"}
+              </button>
+            ) : (
+              <button
+                className="btn-outline"
+                disabled={rerun.isPending}
+                onClick={() => rerun.mutate(call.id)}
+                title="Re-run Sarvam + LLM transcription for this call"
+              >
+                {rerun.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                {rerun.isPending ? "Re-running…" : "Re-run transcription"}
               </button>
             )}
             <button
@@ -109,6 +138,10 @@ export function CallDrawer() {
               <div className="mt-1">
                 <RiskyFlags flags={call.risky_flags} showLabel />
               </div>
+            </div>
+            <div className="col-span-2 sm:col-span-4">
+              <div className="label mb-1">Audio</div>
+              <AudioPlayer fileName={call.file_name} />
             </div>
           </div>
 

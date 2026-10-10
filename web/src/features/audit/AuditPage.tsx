@@ -1,7 +1,7 @@
-import { motion } from "framer-motion";
-import { AudioLines, FlaskConical, GitBranch, Layers, Scale, Wrench, X } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { AudioLines, FlaskConical, GitBranch, Layers, Scale, Wrench, X, Loader2, CheckCircle2 } from "lucide-react";
 import { useMemo } from "react";
-import { useCalls, usePipeline, useRootCauses } from "@/api/hooks";
+import { useCalls, usePipeline, useRootCauses, useScopedCalls } from "@/api/hooks";
 import { UploadCta } from "@/components/Misc";
 import { fadeUp, stagger } from "@/theme/motion";
 import { applyFilters, useAuditFilters } from "./filters";
@@ -9,6 +9,7 @@ import { FiltersPanel } from "./FiltersPanel";
 import { CallsTable } from "./CallsTable";
 import { RiskyQueue } from "./RiskyQueue";
 import { useCallParam } from "./useCallParam";
+import { useUi } from "@/store/ui";
 
 const LOOP = [
   { icon: AudioLines, title: "Transcribe", body: "Saaras v4 codemix + diarization, verbatim vs normalized" },
@@ -58,19 +59,114 @@ function Hero() {
   );
 }
 
+type FileStep = "transcribing" | "grading" | "done";
+
+function ProcessingBanner({
+  pipeline,
+  currentFile,
+  fileStep,
+}: {
+  pipeline: { processed: number; total: number; stage: string };
+  currentFile: string;
+  fileStep: FileStep;
+}) {
+
+  const steps = [
+    { id: "transcribing", label: "Transcribing", detail: "Sarvam ASR + speaker diarization + LLM labeling" },
+    { id: "grading", label: "Grading", detail: "LLM grades Fatal / Non-Fatal with evidence" },
+    { id: "done", label: "Saved", detail: "Written to database" },
+  ];
+
+  const activeStep = fileStep === "transcribing" ? 0 : fileStep === "grading" ? 1 : 2;
+  const pct = pipeline.total > 0 ? (pipeline.processed / pipeline.total) * 100 : 0;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -8 }}
+        className="rounded-2xl border border-line bg-s1 p-4"
+      >
+        <div className="mb-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Loader2 size={15} className="animate-spin text-accent" />
+            <span className="text-sm font-medium text-t1">
+              Processing batch — {pipeline.processed}/{pipeline.total} calls done
+            </span>
+          </div>
+          <span className="text-xs text-tm">{Math.round(pct)}%</span>
+        </div>
+
+        {/* overall progress bar */}
+        <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-s2">
+          <motion.div
+            className="h-full rounded-full"
+            style={{ background: "var(--accent)" }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.5 }}
+          />
+        </div>
+
+        {/* current file + steps */}
+        {currentFile && (
+          <div className="rounded-xl border border-line bg-s2 px-3 py-2.5">
+            <div className="mb-2 truncate text-xs text-tm">{currentFile}</div>
+            <div className="flex items-center gap-1">
+              {steps.map((s, i) => {
+                const done = i < activeStep;
+                const active = i === activeStep;
+                return (
+                  <div key={s.id} className="flex items-center gap-1">
+                    {i > 0 && <div className={`h-px w-4 rounded ${done ? "bg-good" : "bg-line"}`} />}
+                    <div className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs ${active ? "bg-accent-soft text-accent" : done ? "text-good" : "text-tm"}`}>
+                      {done
+                        ? <CheckCircle2 size={11} />
+                        : active
+                        ? <Loader2 size={11} className="animate-spin" />
+                        : <span className="h-2 w-2 rounded-full border border-current opacity-40" />
+                      }
+                      <span>{s.label}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <p className="mt-2 text-xs text-tm">
+          Each call is transcribed then graded by LLM — results appear one by one as they complete (~2–3 min each).
+        </p>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 export function AuditPage() {
-  const { data: calls = [], isLoading } = useCalls();
+  const { isLoading } = useCalls();
+  const scopedCalls = useScopedCalls();
   const { data: pipeline } = usePipeline();
   const { data: rcs = [] } = useRootCauses();
   const f = useAuditFilters();
   const [, openCall] = useCallParam();
-  const filtered = useMemo(() => applyFilters(calls, f.filters), [calls, f.filters]);
+  const fileProgress = useUi((s) => s.fileProgress);
+  const filtered = useMemo(() => applyFilters(scopedCalls, f.filters), [scopedCalls, f.filters]);
   const rcFilter = f.filters.rc ? rcs.find((r) => String(r.id) === f.filters.rc) : undefined;
+  const isProcessing = pipeline?.stage === "processing";
 
-  if (!isLoading && calls.length === 0 && (!pipeline || pipeline.stage === "idle")) return <Hero />;
+  if (!isLoading && scopedCalls.length === 0 && !isProcessing) return <Hero />;
 
   return (
     <div className="space-y-6">
+      {isProcessing && pipeline && (
+        <ProcessingBanner
+          pipeline={{ processed: pipeline.processed ?? 0, total: pipeline.total ?? 0, stage: pipeline.stage }}
+          currentFile={fileProgress?.file ?? ""}
+          fileStep={fileProgress?.step ?? "transcribing"}
+        />
+      )}
+
       {rcFilter && (
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 rounded-xl border border-line bg-s1 px-3 py-2 text-sm">
           <Layers size={14} className="text-accent" />
@@ -81,13 +177,16 @@ export function AuditPage() {
           </button>
         </motion.div>
       )}
-      <div className="grid gap-6 lg:grid-cols-[248px_1fr]">
-        <FiltersPanel calls={calls} f={f} />
-        <div className="min-w-0 space-y-6">
-          <CallsTable calls={filtered} total={calls.length} onOpen={openCall} query={f.filters.q} onQuery={(q) => f.set({ q })} />
-          <RiskyQueue calls={calls} onOpen={openCall} />
+
+      {(!isProcessing || scopedCalls.length > 0) && (
+        <div className="grid gap-6 lg:grid-cols-[248px_1fr]">
+          <FiltersPanel calls={scopedCalls} f={f} />
+          <div className="min-w-0 space-y-6">
+            <CallsTable calls={filtered} total={scopedCalls.length} onOpen={openCall} query={f.filters.q} onQuery={(q) => f.set({ q })} />
+            <RiskyQueue calls={scopedCalls} onOpen={openCall} />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

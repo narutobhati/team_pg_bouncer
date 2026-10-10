@@ -7,6 +7,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     resolve: { alias: { "@": path.resolve(__dirname, "src") } },
+    optimizeDeps: {
+      include: ["framer-motion"],
+    },
     build: {
       rollupOptions: {
         output: {

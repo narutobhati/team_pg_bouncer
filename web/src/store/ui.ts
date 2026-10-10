@@ -27,6 +27,9 @@ interface UiState {
   /** Call ids that arrived in the last moments, for the live-row highlight. */
   fresh: Set<number>;
   markFresh: (id: number) => void;
+  /** Current file being processed, updated by batch.file_progress SSE events. */
+  fileProgress: { file: string; step: "transcribing" | "grading" | "done" } | null;
+  setFileProgress: (p: { file: string; step: "transcribing" | "grading" | "done" } | null) => void;
 }
 
 const readTheme = (): Theme => {
@@ -81,6 +84,8 @@ export const useUi = create<UiState>((set, get) => ({
       set({ fresh: next });
     }, 1600);
   },
+  fileProgress: null,
+  setFileProgress: (fileProgress) => set({ fileProgress }),
 }));
 
 export const prefersDark = () => window.matchMedia("(prefers-color-scheme: dark)").matches;
